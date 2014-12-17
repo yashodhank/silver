@@ -53,15 +53,8 @@ class PlanList(generics.ListCreateAPIView):
         """
         Returns a queryset containing Plans.
 
-        __Accepted filters:__
-
-        * name
-        * currency
-        * enabled
-        * private
-        * interval
-        * product_code
-        * provider
+        Filtering can be done with the following parameters: `name`, `enabled`,
+        `currency`, `private`, `interval`, `product_code`, `provider`.
         """
         return super(PlanList, self).get(request, *args, **kwargs)
 
@@ -151,9 +144,7 @@ class MeteredFeatureList(ListBulkCreateAPIView):
         """
         Returns a queryset containing Metered Features.
 
-        __Accepted filters:__
-
-        * name
+        Filtering can be done with the following parameter: `name`.
         """
         return super(MeteredFeatureList, self).get(request, *args, **kwargs)
 
@@ -201,11 +192,8 @@ class SubscriptionList(generics.ListCreateAPIView):
         """
         Returns a queryset containing Subscriptions.
 
-        __Accepted filters:__
-
-        * plan
-        * customer
-        * company
+        Filtering can be done with the following parameters: `plan`,
+        `customer`, `company`.
         """
         return super(SubscriptionList, self).get(request, *args, **kwargs)
 
@@ -332,7 +320,9 @@ class MeteredFeatureUnitsLogList(APIView):
 
     def get(self, request, format=None, **kwargs):
         """
-        Returns a Subscription Metered Feature Units Log.
+        Returns a Subscription's Metered Feature Units Log.
+
+        The Units Log consists of multiple buckets representing billing cycles.
         """
         metered_feature_pk = kwargs.get('mf', None)
         subscription_pk = kwargs.get('sub', None)
@@ -346,7 +336,7 @@ class MeteredFeatureUnitsLogList(APIView):
 
     def patch(self, request, *args, **kwargs):
         """
-        Updates a Subscription Metered Feature Units Log.
+        Updates a Subscription's Metered Feature Units Log.
 
         In order to perform such an action the subscription must be active.
 
@@ -482,14 +472,14 @@ class CustomerList(generics.ListCreateAPIView):
         """
         Returns a queryset containing Customers.
 
-        __Accepted filters:__
+        Specifying the filtering parameter `overdue=true` will narrow the
+        results to all the customers which have overdue invoices.
 
-        * active
-        * email
-        * company
-        * name
-        * country
-        * sales_tax_name
+        The `overdue_by=X` parameter can be used to list all the customers
+        which have overdue invoices for more than X days.
+
+        Further filtering can be done by using the following parameters:
+        `email`, `name`, `company`, `active`, `country`, `sales_tax_name`.
         """
         return super(CustomerList, self).get(request, *args, **kwargs)
 
@@ -557,10 +547,7 @@ class ProviderListBulkCreate(ListBulkCreateAPIView):
         """
         Returns a queryset containing Providers.
 
-        __Accepted filters:__
-
-        * email
-        * company
+        Filtering can be done with the following parameters: `email`, `company`.
         """
         return super(ProviderListBulkCreate, self).get(request, *args, **kwargs)
 
