@@ -1,7 +1,7 @@
 import datetime
 from django_filters import FilterSet, CharFilter, BooleanFilter
 
-from rest_framework import generics, permissions, status, filters, mixins
+from rest_framework import generics, permissions, status, filters
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -34,14 +34,42 @@ class PlanFilter(FilterSet):
 
 
 class PlanList(generics.ListCreateAPIView):
+    """
+    **Plans endpoint**
+    """
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
     serializer_class = PlanSerializer
     queryset = Plan.objects.all()
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = PlanFilter
 
+    def post(self, request, *args, **kwargs):
+        """
+        Adds a new Plan.
+        """
+        return super(PlanList, self).post(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a queryset containing Plans.
+
+        __Accepted filters:__
+
+        * name
+        * currency
+        * enabled
+        * private
+        * interval
+        * product_code
+        * provider
+        """
+        return super(PlanList, self).get(request, *args, **kwargs)
+
 
 class PlanDetail(generics.RetrieveDestroyAPIView):
+    """
+    **Plan endpoint.**
+    """
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
     serializer_class = PlanSerializer
     model = Plan
@@ -50,7 +78,16 @@ class PlanDetail(generics.RetrieveDestroyAPIView):
         pk = self.kwargs.get('pk', None)
         return get_object_or_404(Plan, pk=pk)
 
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a specific Plan.
+        """
+        return super(PlanDetail, self).get(request, *args, **kwargs)
+
     def patch(self, request, *args, **kwargs):
+        """
+        Updates the `name`, `generate_after` and `due_days` fields of a Plan.
+        """
         plan = get_object_or_404(Plan.objects, pk=self.kwargs.get('pk', None))
         name = request.data.get('name', None)
         generate_after = request.data.get('generate_after', None)
@@ -63,6 +100,9 @@ class PlanDetail(generics.RetrieveDestroyAPIView):
                         status=status.HTTP_200_OK)
 
     def delete(self, request, *args, **kwargs):
+        """
+        Performs a soft delete on a specific Plan.
+        """
         plan = get_object_or_404(Plan.objects, pk=self.kwargs.get('pk', None))
         plan.enabled = False
         plan.save()
@@ -71,6 +111,9 @@ class PlanDetail(generics.RetrieveDestroyAPIView):
 
 
 class PlanMeteredFeatures(generics.ListAPIView):
+    """
+    Returns a list of the plan's Metered Features.
+    """
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
     serializer_class = MeteredFeatureSerializer
     model = MeteredFeature
@@ -89,14 +132,36 @@ class MeteredFeaturesFilter(FilterSet):
 
 
 class MeteredFeatureList(ListBulkCreateAPIView):
+    """
+    Metered Features endpoint.
+    """
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
     serializer_class = MeteredFeatureSerializer
     queryset = MeteredFeature.objects.all()
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = MeteredFeaturesFilter
 
+    def post(self, request, *args, **kwargs):
+        """
+        Adds a new Metered Feature.
+        """
+        return super(MeteredFeatureList, self).post(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a queryset containing Metered Features.
+
+        __Accepted filters:__
+
+        * name
+        """
+        return super(MeteredFeatureList, self).get(request, *args, **kwargs)
+
 
 class MeteredFeatureDetail(generics.RetrieveAPIView):
+    """
+    Returns a specific Metered Feature.
+    """
     def get_object(self):
         pk = self.kwargs.get('pk', None)
         return get_object_or_404(MeteredFeature, pk=pk)
@@ -117,14 +182,38 @@ class SubscriptionFilter(FilterSet):
 
 
 class SubscriptionList(generics.ListCreateAPIView):
+    """
+    **Subscriptions endpoint**
+    """
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
     queryset = Subscription.objects.all()
     serializer_class = SubscriptionSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = SubscriptionFilter
 
+    def post(self, request, *args, **kwargs):
+        """
+        Adds a new Subscription.
+        """
+        return super(SubscriptionList, self).post(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a queryset containing Subscriptions.
+
+        __Accepted filters:__
+
+        * plan
+        * customer
+        * company
+        """
+        return super(SubscriptionList, self).get(request, *args, **kwargs)
+
 
 class SubscriptionDetail(generics.RetrieveAPIView):
+    """
+    Returns a specific Subscription.
+    """
     def get_object(self):
         pk = self.kwargs.get('pk', None)
         return get_object_or_404(Subscription, pk=pk)
@@ -138,6 +227,9 @@ class SubscriptionDetailActivate(APIView):
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
 
     def post(self, request, *args, **kwargs):
+        """
+        Used to activate a specific Subscription.
+        """
         sub = get_object_or_404(Subscription.objects,
                                 pk=self.kwargs.get('sub', None))
         if sub.state != 'inactive':
@@ -161,6 +253,9 @@ class SubscriptionDetailCancel(APIView):
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
 
     def post(self, request, *args, **kwargs):
+        """
+        Used to cancel a specific Subscription.
+        """
         sub = get_object_or_404(Subscription.objects,
                                 pk=self.kwargs.get('sub', None))
         when = request.data.get('when', None)
@@ -188,6 +283,9 @@ class SubscriptionDetailReactivate(APIView):
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
 
     def post(self, request, *args, **kwargs):
+        """
+        Used to reactivate a specific Subscription.
+        """
         sub = get_object_or_404(Subscription.objects,
                                 pk=self.kwargs.get('sub', None))
         if sub.state != 'canceled':
@@ -206,6 +304,9 @@ class MeteredFeatureUnitsLogList(APIView):
     paginate_by = None
 
     def get(self, request, format=None, **kwargs):
+        """
+        Returns a Subscription Metered Feature Units Log.
+        """
         metered_feature_pk = kwargs.get('mf', None)
         subscription_pk = kwargs.get('sub', None)
         logs = MeteredFeatureUnitsLog.objects.filter(
@@ -217,6 +318,9 @@ class MeteredFeatureUnitsLogList(APIView):
         return Response(serializer.data)
 
     def patch(self, request, *args, **kwargs):
+        """
+        Updates a Subscription Metered Feature Units Log.
+        """
         metered_feature_pk = self.kwargs['mf']
         subscription_pk = self.kwargs['sub']
         date = request.data.get('date', None)
@@ -309,7 +413,8 @@ class CustomerFilter(FilterSet):
 
     class Meta:
         model = Customer
-        fields = ['email', 'name', 'company', 'active', 'country', 'sales_tax_name']
+        fields = ['email', 'name', 'company', 'active', 'country',
+                  'sales_tax_name']
 
 
 class CustomerList(generics.ListCreateAPIView):
@@ -319,15 +424,60 @@ class CustomerList(generics.ListCreateAPIView):
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = CustomerFilter
 
+    def post(self, request, *args, **kwargs):
+        """
+        Adds a new Customer.
+        """
+        return super(CustomerList, self).post(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a queryset containing Customers.
+
+        __Accepted filters:__
+
+        * active
+        * email
+        * company
+        * name
+        * country
+        * sales_tax_name
+        """
+        return super(CustomerList, self).get(request, *args, **kwargs)
+
 
 class CustomerDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
+    serializer_class = CustomerSerializer
+    model = Customer
+
     def get_object(self):
         pk = self.kwargs.get('pk', None)
         return get_object_or_404(Customer, pk=pk)
 
-    permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
-    serializer_class = CustomerSerializer
-    model = Customer
+    def put(self, request, *args, **kwargs):
+        """
+        Adds or updates a Customer.
+        """
+        return super(CustomerDetail, self).put(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        """
+        Updates an existing Customer.
+        """
+        return super(CustomerDetail, self).patch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a specific Customer.
+        """
+        return super(CustomerDetail, self).get(request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        """
+        Performs a soft delete on a specific Customer.
+        """
+        return super(CustomerDetail, self).delete(request, *args, **kwargs)
 
 
 class ProviderFilter(FilterSet):
@@ -346,8 +496,54 @@ class ProviderListBulkCreate(ListBulkCreateAPIView):
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = ProviderFilter
 
+    def post(self, request, *args, **kwargs):
+        """
+        Adds a new Provider.
+        """
+        return super(ProviderListBulkCreate, self).post(
+            request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a queryset containing Provider.
+
+        __Accepted filters:__
+
+        * email
+        * company
+        """
+        return super(ProviderListBulkCreate, self).get(request, *args, **kwargs)
+
 
 class ProviderRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
     serializer_class = ProviderSerializer
     queryset = Provider.objects.all()
+
+    def put(self, request, *args, **kwargs):
+        """
+        Adds or updates a Provider.
+        """
+        return super(ProviderRetrieveUpdateDestroy, self).put(
+            request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        """
+        Updates an existing Provider.
+        """
+        return super(ProviderRetrieveUpdateDestroy, self).patch(
+            request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a specific Provider.
+        """
+        return super(ProviderRetrieveUpdateDestroy, self).get(
+            request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        """
+        Performs a soft delete on a specific Provider.
+        """
+        return super(ProviderRetrieveUpdateDestroy, self).delete(
+            request, *args, **kwargs)
