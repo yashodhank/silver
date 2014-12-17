@@ -5,3 +5,4 @@ django-filter
 djangorestframework-bulk
 django-livefield
 django-rest-swagger
+markdown
