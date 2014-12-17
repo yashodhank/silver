@@ -32,7 +32,8 @@ EXTERNAL_APPS = [
     'rest_framework',
     'django_extensions',
     'django_filters',
-    'rest_framework_swagger'
+    'rest_framework_swagger',
+    'markdown'
 ]
 
 INTERNAL_APPS = [
