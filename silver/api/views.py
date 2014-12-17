@@ -229,6 +229,17 @@ class SubscriptionDetailActivate(APIView):
     def post(self, request, *args, **kwargs):
         """
         Used to activate a specific Subscription.
+
+        When activating a subscription the following happen:
+
+        * the subscription `start_date` is set to the current date if it isn't
+        already set or given in the request;
+        * the subscription `trial_end_date` is computed from the `start_date`
+        plus the plan's `trial_period_days` if it hasn't been already set or
+        given in the request;
+        * the subscription `state` is transitioned to `active`.
+
+        This transition is only available from the `inactive` state.
         """
         sub = get_object_or_404(Subscription.objects,
                                 pk=self.kwargs.get('sub', None))
@@ -255,6 +266,17 @@ class SubscriptionDetailCancel(APIView):
     def post(self, request, *args, **kwargs):
         """
         Used to cancel a specific Subscription.
+
+        A `when` parameter needs to be provided in the request body.
+        It can take two values: `now` and `end_of_billing_cycle`.
+
+        When cancelling a subscription `now`, a final invoice is issued and the
+        subscription is transitioned to `ended` state.
+
+        When cancelling a subscription at the `end_of_billing_cycle` the
+        subscription is only transitioned to the `canceled` state.
+        At the end of the billing cycle a final invoice will be issued and the
+        subscription will be transitioned to the `ended` state.
         """
         sub = get_object_or_404(Subscription.objects,
                                 pk=self.kwargs.get('sub', None))
@@ -285,6 +307,11 @@ class SubscriptionDetailReactivate(APIView):
     def post(self, request, *args, **kwargs):
         """
         Used to reactivate a specific Subscription.
+
+        Subscriptions which are canceled, can be reactivated before the end of
+        the billing cycle.
+
+        The request just transitions a subscription from `canceled` to `active`.
         """
         sub = get_object_or_404(Subscription.objects,
                                 pk=self.kwargs.get('sub', None))
@@ -320,6 +347,27 @@ class MeteredFeatureUnitsLogList(APIView):
     def patch(self, request, *args, **kwargs):
         """
         Updates a Subscription Metered Feature Units Log.
+
+        In order to perform such an action the subscription must be active.
+
+        There are 3 parameters required in the request body: `count`,
+        `update_type` and `date`.
+
+        The `count` parameter is the value to update the bucket with and it can
+        be either positive or negative.
+
+        The `update_type` parameter can be absolute (meaning the new bucket
+        value will be equal to the count value) or relative (meaning the count
+        value will be added to the bucket value).
+
+        The bucket is determined using the `date` parameter.
+        The buckets can be updated until the time given by the bucket
+        `end_date` + the plan's `generate_after` seconds is older than the
+        time when the request is made.
+        After that, the buckets are frozen and cannot be updated anymore.
+
+        Requests that are invalid or late will return a HTTP 4XX status code
+        response.
         """
         metered_feature_pk = self.kwargs['mf']
         subscription_pk = self.kwargs['sub']
@@ -457,13 +505,13 @@ class CustomerDetail(generics.RetrieveUpdateDestroyAPIView):
 
     def put(self, request, *args, **kwargs):
         """
-        Adds or updates a Customer.
+        Adds or does a full update on a Customer.
         """
         return super(CustomerDetail, self).put(request, *args, **kwargs)
 
     def patch(self, request, *args, **kwargs):
         """
-        Updates an existing Customer.
+        Partially updates an existing Customer.
         """
         return super(CustomerDetail, self).patch(request, *args, **kwargs)
 
@@ -476,6 +524,8 @@ class CustomerDetail(generics.RetrieveUpdateDestroyAPIView):
     def delete(self, request, *args, **kwargs):
         """
         Performs a soft delete on a specific Customer.
+
+        Deleting a customer automatically cancels that customer's subscriptions.
         """
         return super(CustomerDetail, self).delete(request, *args, **kwargs)
 
@@ -505,7 +555,7 @@ class ProviderListBulkCreate(ListBulkCreateAPIView):
 
     def get(self, request, *args, **kwargs):
         """
-        Returns a queryset containing Provider.
+        Returns a queryset containing Providers.
 
         __Accepted filters:__
 
@@ -522,14 +572,14 @@ class ProviderRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
 
     def put(self, request, *args, **kwargs):
         """
-        Adds or updates a Provider.
+        Adds or does a full update on a Provider.
         """
         return super(ProviderRetrieveUpdateDestroy, self).put(
             request, *args, **kwargs)
 
     def patch(self, request, *args, **kwargs):
         """
-        Updates an existing Provider.
+        Partially updates an existing Provider.
         """
         return super(ProviderRetrieveUpdateDestroy, self).patch(
             request, *args, **kwargs)
