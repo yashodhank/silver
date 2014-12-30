@@ -116,6 +116,8 @@ class TestPlanEndpoint(APITestCase):
 
     def test_get_plan_detail(self):
         plan = PlanFactory.create()
+        plan.enabled = True
+        plan.save()
 
         url = reverse('silver_api:plan-detail', kwargs={'pk': plan.pk})
 
@@ -125,7 +127,7 @@ class TestPlanEndpoint(APITestCase):
         self.assertNotEqual(response.data, [])
 
     def test_get_plan_detail_unexisting(self):
-        url = reverse('silver_api:plan-detail', kwargs={'pk': 1})
+        url = reverse('silver_api:plan-detail', kwargs={'pk': 2})
 
         response = self.client.get(url)
 
