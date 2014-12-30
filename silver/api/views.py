@@ -1,11 +1,19 @@
 import datetime
+from django.utils.encoding import force_text
 from django_filters import FilterSet, CharFilter, BooleanFilter
 
-from rest_framework import generics, permissions, status, filters, mixins
+from rest_framework import generics, permissions, status, filters
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_bulk import ListBulkCreateAPIView
+from rest_framework_extensions.cache.decorators import cache_response
+
+from rest_framework_extensions.cache.mixins import (ListCacheResponseMixin,
+                                                    RetrieveCacheResponseMixin)
+from rest_framework_extensions.key_constructor import bits, constructors
+from django.core.cache import cache
+
 from silver.api.dateutils import last_date_that_fits
 
 from silver.models import (MeteredFeatureUnitsLog, Subscription, MeteredFeature,
@@ -16,6 +24,31 @@ from silver.api.serializers import (MeteredFeatureUnitsLogSerializer,
                                     PlanSerializer, MeteredFeatureSerializer,
                                     ProviderSerializer)
 from silver.utils import get_object_or_None
+
+
+class UpdatedAtKeyBit(bits.KeyBitBase):
+    def get_data(self, **kwargs):
+        key = 'api_updated_at_timestamp'
+        value = cache.get(key, None)
+        if not value:
+            value = datetime.datetime.utcnow()
+            cache.set(key, value=value)
+        return force_text(value)
+
+
+class CustomKeyConstructor(constructors.DefaultKeyConstructor):
+    updated_at = UpdatedAtKeyBit()
+
+
+class CustomObjectKeyConstructor(constructors.DefaultKeyConstructor):
+    retrieve_sql = bits.RetrieveSqlQueryKeyBit()
+    updated_at = UpdatedAtKeyBit()
+
+
+class CustomListKeyConstructor(constructors.DefaultKeyConstructor):
+    list_sql = bits.ListSqlQueryKeyBit()
+    pagination = bits.PaginationKeyBit()
+    updated_at = UpdatedAtKeyBit()
 
 
 class PlanFilter(FilterSet):
@@ -40,15 +73,23 @@ class PlanList(generics.ListCreateAPIView):
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = PlanFilter
 
+    @cache_response(key_func=CustomListKeyConstructor())
+    def get(self, request, *args, **kwargs):
+        return super(PlanList, self).get(request, *args, **kwargs)
 
-class PlanDetail(generics.RetrieveDestroyAPIView):
+
+class PlanDetail(generics.RetrieveDestroyAPIView, RetrieveCacheResponseMixin):
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
     serializer_class = PlanSerializer
-    model = Plan
+    queryset = Plan.objects.all()
+
+    @cache_response(key_func=CustomObjectKeyConstructor())
+    def get(self, request, *args, **kwargs):
+        return super(PlanDetail, self).get(request, *args, **kwargs)
 
     def get_object(self):
         pk = self.kwargs.get('pk', None)
-        return get_object_or_404(Plan, pk=pk)
+        return get_object_or_404(Plan, pk=pk, enabled=True)
 
     def patch(self, request, *args, **kwargs):
         plan = get_object_or_404(Plan.objects, pk=self.kwargs.get('pk', None))
@@ -73,7 +114,11 @@ class PlanDetail(generics.RetrieveDestroyAPIView):
 class PlanMeteredFeatures(generics.ListAPIView):
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
     serializer_class = MeteredFeatureSerializer
-    model = MeteredFeature
+    queryset = MeteredFeature.objects.all()
+
+    @cache_response(key_func=CustomListKeyConstructor())
+    def get(self, request, *args, **kwargs):
+        return super(PlanMeteredFeatures, self).get(request, *args, **kwargs)
 
     def get_queryset(self):
         plan = get_object_or_None(Plan, pk=self.kwargs['pk'])
@@ -95,15 +140,23 @@ class MeteredFeatureList(ListBulkCreateAPIView):
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = MeteredFeaturesFilter
 
+    @cache_response(key_func=CustomListKeyConstructor())
+    def get(self, request, *args, **kwargs):
+        return super(MeteredFeatureList, self).get(request, *args, **kwargs)
+
 
 class MeteredFeatureDetail(generics.RetrieveAPIView):
+    permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
+    serializer_class = MeteredFeatureSerializer
+    queryset = MeteredFeature.objects.all()
+
     def get_object(self):
         pk = self.kwargs.get('pk', None)
         return get_object_or_404(MeteredFeature, pk=pk)
 
-    permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
-    serializer_class = MeteredFeatureSerializer
-    model = MeteredFeature
+    @cache_response(key_func=CustomObjectKeyConstructor())
+    def get(self, request, *args, **kwargs):
+        return super(MeteredFeatureDetail, self).get(request, *args, **kwargs)
 
 
 class SubscriptionFilter(FilterSet):
@@ -123,15 +176,23 @@ class SubscriptionList(generics.ListCreateAPIView):
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = SubscriptionFilter
 
+    @cache_response(key_func=CustomListKeyConstructor())
+    def get(self, request, *args, **kwargs):
+        return super(SubscriptionList, self).get(request, *args, **kwargs)
+
 
 class SubscriptionDetail(generics.RetrieveAPIView):
+    permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
+    queryset = Subscription.objects.all()
+    serializer_class = SubscriptionDetailSerializer
+
     def get_object(self):
         pk = self.kwargs.get('pk', None)
         return get_object_or_404(Subscription, pk=pk)
 
-    permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
-    model = Subscription
-    serializer_class = SubscriptionDetailSerializer
+    @cache_response(key_func=CustomObjectKeyConstructor())
+    def get(self, request, *args, **kwargs):
+        return super(SubscriptionDetail, self).get(request, *args, **kwargs)
 
 
 class SubscriptionDetailActivate(APIView):
@@ -205,6 +266,7 @@ class MeteredFeatureUnitsLogList(APIView):
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
     paginate_by = None
 
+    @cache_response(key_func=CustomKeyConstructor())
     def get(self, request, format=None, **kwargs):
         metered_feature_pk = kwargs.get('mf', None)
         subscription_pk = kwargs.get('sub', None)
@@ -319,15 +381,23 @@ class CustomerList(generics.ListCreateAPIView):
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = CustomerFilter
 
+    @cache_response(key_func=CustomListKeyConstructor())
+    def get(self, request, *args, **kwargs):
+        return super(CustomerList, self).get(request, *args, **kwargs)
+
 
 class CustomerDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
+    serializer_class = CustomerSerializer
+    queryset = Customer.objects.all()
+
     def get_object(self):
         pk = self.kwargs.get('pk', None)
         return get_object_or_404(Customer, pk=pk)
 
-    permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
-    serializer_class = CustomerSerializer
-    model = Customer
+    @cache_response(key_func=CustomObjectKeyConstructor())
+    def get(self, request, *args, **kwargs):
+        return super(CustomerDetail, self).get(request, *args, **kwargs)
 
 
 class ProviderFilter(FilterSet):
@@ -346,8 +416,18 @@ class ProviderListBulkCreate(ListBulkCreateAPIView):
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = ProviderFilter
 
+    @cache_response(key_func=CustomListKeyConstructor())
+    def get(self, request, *args, **kwargs):
+        return super(ProviderListBulkCreate, self).get(request, *args, **kwargs)
+
+
 
 class ProviderRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser,)
     serializer_class = ProviderSerializer
     queryset = Provider.objects.all()
+
+    @cache_response(key_func=CustomObjectKeyConstructor())
+    def get(self, request, *args, **kwargs):
+        return super(ProviderRetrieveUpdateDestroy, self).get(request,
+                                                              *args, **kwargs)
