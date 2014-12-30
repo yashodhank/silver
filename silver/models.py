@@ -1,7 +1,9 @@
 """Models for the silver app."""
 import datetime
 from django.core.exceptions import ValidationError
+from django.core.cache import cache
 from django.db import models
+from django.db.models.signals import post_save, post_delete
 from django_fsm import FSMField, transition
 from international.models import countries, currencies
 from livefield.models import LiveModel
@@ -316,3 +318,12 @@ class Provider(BillingEntity):
 
     def __unicode__(self):
         return " - ".join(filter(None, [self.name, self.company]))
+
+
+def change_api_updated_at(sender=None, instance=None, *args, **kwargs):
+    cache.set('api_updated_at_timestamp', datetime.datetime.utcnow())
+
+for model in [Customer, Provider, MeteredFeature, Plan, MeteredFeatureUnitsLog,
+              Subscription]:
+    post_save.connect(receiver=change_api_updated_at, sender=model)
+    post_delete.connect(receiver=change_api_updated_at, sender=model)
