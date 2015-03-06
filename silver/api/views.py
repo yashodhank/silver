@@ -112,7 +112,7 @@ class PlanMeteredFeatures(HPListAPIView):
 
 class MeteredFeatureList(HPListCreateAPIView):
     """
-    Metered Features endpoint.
+    **Metered Features endpoint.**
     """
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = MeteredFeatureSerializer
@@ -173,7 +173,7 @@ class SubscriptionList(HPListCreateAPIView):
         Returns a queryset containing Subscriptions.
 
         Filtering can be done with the following parameters: `plan`,
-        `customer`, `company`.
+        `reference`, `state`.
         """
         return super(SubscriptionList, self).get(request, *args, **kwargs)
 
@@ -460,6 +460,9 @@ class MeteredFeatureUnitsLogDetail(APIView):
 
 
 class CustomerList(HPListCreateAPIView):
+    """
+    **Customers Endpoint**
+    """
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = CustomerSerializer
     queryset = Customer.objects.all()
@@ -483,7 +486,8 @@ class CustomerList(HPListCreateAPIView):
         which have overdue invoices for more than X days.
 
         Further filtering can be done by using the following parameters:
-        `email`, `name`, `company`, `active`, `country`, `sales_tax_name`.
+        `email`, `name`, `company`, `active`, `country`, `reference`,
+         `sales_tax_name`, `consolidated_billing`, `sales_tax_number`.
         """
         return super(CustomerList, self).get(request, *args, **kwargs)
 
@@ -532,11 +536,44 @@ class ProductCodeListCreate(generics.ListCreateAPIView):
     serializer_class = ProductCodeSerializer
     queryset = ProductCode.objects.all()
 
+    def post(self, request, *args, **kwargs):
+        """
+        Adds a new Product Code.
+        """
+        return super(ProductCodeListCreate, self).post(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a queryset containing Product Codes.
+        """
+        return super(ProductCodeListCreate, self).get(request, *args, **kwargs)
+
 
 class ProductCodeRetrieveUpdate(generics.RetrieveUpdateAPIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = ProductCodeSerializer
     queryset = ProductCode.objects.all()
+
+    def put(self, request, *args, **kwargs):
+        """
+        Adds or does a full update on a Product Code.
+        """
+        return super(ProductCodeRetrieveUpdate, self).put(
+            request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        """
+        Partially updates an existing Product Code.
+        """
+        return super(ProductCodeRetrieveUpdate, self).patch(
+            request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a specific Product Code.
+        """
+        return super(ProductCodeRetrieveUpdate, self).get(
+            request, *args, **kwargs)
 
 
 class ProviderListCreate(HPListBulkCreateAPIView):
@@ -550,8 +587,7 @@ class ProviderListCreate(HPListBulkCreateAPIView):
         """
         Adds a new Provider.
         """
-        return super(ProviderListCreate, self).post(
-            request, *args, **kwargs)
+        return super(ProviderListCreate, self).post(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
         """
@@ -597,17 +633,68 @@ class ProviderRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
 
 
 class InvoiceListCreate(HPListCreateAPIView):
+    """
+    **Invoices Endpoint**
+    """
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = InvoiceSerializer
     queryset = Invoice.objects.all()
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = InvoiceFilter
 
+    def post(self, request, *args, **kwargs):
+        """
+        Adds a new Invoice.
+        """
+        return super(InvoiceListCreate, self).post(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a queryset containing Invoices.
+
+        Filtering can be done with the following parameters: `state`, `number`,
+         `customer_name`, `customer_company`, `issue_date`, `due_date`,
+         `paid_date`, `cancel_date`, `currency`, `sales_tax_name`, `series`
+        """
+        return super(InvoiceListCreate, self).get(request, *args, **kwargs)
+
 
 class InvoiceRetrieveUpdate(generics.RetrieveUpdateAPIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = InvoiceSerializer
     queryset = Invoice.objects.all()
+
+    def put(self, request, *args, **kwargs):
+        """
+        Adds or does a full update on an Invoice.
+
+        Modifying an invoice is only possible when it's in draft state. Also,
+        take note that the invoice state cannot be updated through this method.
+        """
+        return super(InvoiceRetrieveUpdate, self).put(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        """
+        Partially updates an existing Invoice.
+
+        Modifying an invoice is only possible when it's in draft state. Also,
+        take note that the invoice state cannot be updated through this method.
+        """
+        return super(InvoiceRetrieveUpdate, self).patch(
+            request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a specific Invoice.
+        """
+        return super(InvoiceRetrieveUpdate, self).get(request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        """
+        Performs a soft delete on a specific Invoice.
+        """
+        return super(InvoiceRetrieveUpdate, self).delete(
+            request, *args, **kwargs)
 
 
 class DocEntryCreate(generics.CreateAPIView):
@@ -653,6 +740,11 @@ class InvoiceEntryCreate(DocEntryCreate):
     queryset = DocumentEntry.objects.all()
 
     def post(self, request, *args, **kwargs):
+        """
+        Adds an entry to an invoice.
+
+        This operation is only possible when the invoice is in draft state.
+        """
         return super(InvoiceEntryCreate, self).post(request, *args, **kwargs)
 
     def get_model(self):
@@ -720,10 +812,20 @@ class InvoiceEntryUpdateDestroy(DocEntryUpdateDestroy):
     queryset = DocumentEntry.objects.all()
 
     def put(self, request, *args, **kwargs):
+        """
+        Updates an entry of an invoice.
+
+        This operation is only possible when the invoice is in draft state.
+        """
         return super(InvoiceEntryUpdateDestroy, self).put(request, *args,
                                                           **kwargs)
 
     def delete(self, request, *args, **kwargs):
+        """
+        Deletes an entry from an invoice.
+
+        This operation is only possible when the invoice is in draft state.
+        """
         return super(InvoiceEntryUpdateDestroy, self).delete(request, *args,
                                                              **kwargs)
 
@@ -739,6 +841,42 @@ class InvoiceStateHandler(APIView):
     serializer_class = InvoiceSerializer
 
     def patch(self, request, *args, **kwargs):
+        """
+        Used to issue, cancel or pay an invoice.
+
+        The operation is decided by providing the `state` field.
+
+
+        ##Issuing (state = 'issued')##
+        The invoice must be in `draft` state.
+
+        When issue_date is specified, the invoice's issue_date is set to this
+        value. If it's not and the invoice has no issue_date set, it it set to
+        the current date.
+
+        If due_date is specified it overwrites the invoice's due_date
+        If the invoice has no billing_details set, it copies the
+        billing_details from the customer. The same goes with sales_tax_percent
+        and sales_tax_name
+        It sets the invoice status to issued.
+
+
+        ##Paying (state = 'paid')##
+        The invoice must be in the issued state. Paying an invoice follows
+        these steps:
+
+        If paid_date is specified, set the invoice paid_date to this value,
+        else set the invoice paid_date to the current date.
+        Sets the invoice status to paid.
+
+        ##Paying (state = 'canceled')##
+        The invoice must be in the issued state. Canceling an invoice follows
+        these steps:
+
+        If cancel_date is specified, set the invoice cancel_date to this value,
+        else set the invoice cancel_date to the current date.
+        Sets the invoice status to paid.
+        """
         invoice_pk = kwargs.get('pk')
         try:
             invoice = Invoice.objects.get(pk=invoice_pk)
