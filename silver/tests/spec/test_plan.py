@@ -3,8 +3,10 @@ import json
 from rest_framework import status
 from rest_framework.reverse import reverse
 from rest_framework.test import APITestCase
+
+from silver.models import ProductCode
 from silver.tests.factories import (AdminUserFactory, ProviderFactory,
-                                    PlanFactory, MeteredFeatureFactory)
+                                    PlanFactory, ProductCodeFactory)
 
 
 class TestPlanEndpoint(APITestCase):
@@ -13,16 +15,13 @@ class TestPlanEndpoint(APITestCase):
         self.client.force_authenticate(user=admin_user)
 
     def test_create_plan(self):
-        url = reverse('silver_api:plan-list')
+        url = reverse('plan-list')
 
-        metered_features = MeteredFeatureFactory.create_batch(3)
-        mf_urls = []
-        for mf in metered_features:
-            mf_urls.append(reverse('silver_api:metered-feature-detail',
-                                   kwargs={'pk': mf.pk}))
-
+        ProductCodeFactory.create_batch(2)
+        feature1_pc = ProductCode.objects.get(id=1).value
+        plan_pc = ProductCode.objects.get(id=2).value
         provider = ProviderFactory.create()
-        provider_url = reverse('silver_api:provider-detail',
+        provider_url = reverse('provider-detail',
                                kwargs={'pk': provider.pk})
         response = self.client.post(url, json.dumps({
             "name": "Hydrogen",
@@ -35,22 +34,25 @@ class TestPlanEndpoint(APITestCase):
             "generate_after": 86400,
             "enabled": True,
             "private": False,
-            "product_code": "1234",
+            "product_code": plan_pc,
             'metered_features': [
                 {'name': 'Page Views',
+                 'unit': '100k',
                  'price_per_unit': 0.01,
-                 'included_units': 0},
+                 'included_units': 0,
+                 'product_code': feature1_pc},
                 {'name': 'VIP Support',
                  'price_per_unit': 49.99,
-                 'included_units': 1}
+                 'included_units': 1,
+                 'product_code': "1234"}
             ],
             'provider': provider_url
         }), content_type='application/json')
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        assert response.status_code == status.HTTP_201_CREATED
 
     def test_create_plan_without_required_fields(self):
-        url = reverse('silver_api:plan-list')
+        url = reverse('plan-list')
 
         response = self.client.post(url, json.dumps({
             "name": "Hydrogen",
@@ -69,7 +71,7 @@ class TestPlanEndpoint(APITestCase):
     def test_patch_plan(self):
         plan = PlanFactory.create()
 
-        url = reverse('silver_api:plan-detail', kwargs={'pk': plan.pk})
+        url = reverse('plan-detail', kwargs={'pk': plan.pk})
 
         response = self.client.patch(url, json.dumps({
             "name": "Hydrogen",
@@ -84,7 +86,7 @@ class TestPlanEndpoint(APITestCase):
     def test_patch_plan_non_editable_field(self):
         plan = PlanFactory.create()
 
-        url = reverse('silver_api:plan-detail', kwargs={'pk': plan.pk})
+        url = reverse('plan-detail', kwargs={'pk': plan.pk})
 
         response = self.client.patch(url, json.dumps({
             "currency": "DollaDolla"
@@ -95,7 +97,7 @@ class TestPlanEndpoint(APITestCase):
     def test_put_plan(self):
         plan = PlanFactory.create()
 
-        url = reverse('silver_api:plan-detail', kwargs={'pk': plan.pk})
+        url = reverse('plan-detail', kwargs={'pk': plan.pk})
 
         response = self.client.put(url)
 
@@ -105,19 +107,41 @@ class TestPlanEndpoint(APITestCase):
                          {u'detail': u"Method 'PUT' not allowed."})
 
     def test_get_plan_list(self):
-        PlanFactory.create()
+        PlanFactory.create_batch(40)
 
-        url = reverse('silver_api:plan-list')
+        url = reverse('plan-list')
 
         response = self.client.get(url)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertNotEqual(response.data, [])
+        full_url = None
+        for field in response.data:
+            full_url = field.get('url', None)
+            if full_url:
+                break
+        if full_url:
+            domain = full_url.split('/')[2]
+            full_url = full_url.split(domain)[0] + domain + url
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response._headers['x-result-count'] == ('X-Result-Count', '40')
+        assert response._headers['link'] == \
+            ('Link', '<' + full_url + '?page=2>; rel="next", ' +
+             '<' + full_url + '?page=2>; rel="last", ' +
+             '<' + full_url + '?page=1>; rel="first"')
+
+        response = self.client.get(url + '?page=2')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response._headers['x-result-count'] == ('X-Result-Count', '40')
+        assert response._headers['link'] == \
+            ('Link', '<' + full_url + '?page=1>; rel="prev", ' +
+             '<' + full_url + '?page=2>; rel="last", ' +
+             '<' + full_url + '?page=1>; rel="first"')
 
     def test_get_plan_detail(self):
         plan = PlanFactory.create()
 
-        url = reverse('silver_api:plan-detail', kwargs={'pk': plan.pk})
+        url = reverse('plan-detail', kwargs={'pk': plan.pk})
 
         response = self.client.get(url)
 
@@ -125,7 +149,7 @@ class TestPlanEndpoint(APITestCase):
         self.assertNotEqual(response.data, [])
 
     def test_get_plan_detail_unexisting(self):
-        url = reverse('silver_api:plan-detail', kwargs={'pk': 1})
+        url = reverse('plan-detail', kwargs={'pk': 1})
 
         response = self.client.get(url)
 
@@ -136,7 +160,7 @@ class TestPlanEndpoint(APITestCase):
         plan.enabled = True
         plan.save()
 
-        url = reverse('silver_api:plan-detail', kwargs={'pk': 1})
+        url = reverse('plan-detail', kwargs={'pk': 1})
 
         response = self.client.delete(url)
 
@@ -144,7 +168,7 @@ class TestPlanEndpoint(APITestCase):
         self.assertEqual(response.data, {"deleted": True})
 
     def test_delete_plan_unexisting(self):
-        url = reverse('silver_api:plan-detail', kwargs={'pk': 1})
+        url = reverse('plan-detail', kwargs={'pk': 1})
 
         response = self.client.delete(url)
 

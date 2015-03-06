@@ -6,3 +6,5 @@ djangorestframework-bulk
 django-livefield
 django-rest-swagger
 markdown
+django-jsonfield
+git+git://github.com/PressLabs/django-rest-hooks.git

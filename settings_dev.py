@@ -18,6 +18,7 @@ DATABASES = {
 
 EXTERNAL_APPS = [
     # Django core apps
+    #'django_admin_bootstrapped',
     'django.contrib.admin',
     'django.contrib.admindocs',
     'django.contrib.auth',
@@ -30,8 +31,12 @@ EXTERNAL_APPS = [
     'international',
     'django_fsm',
     'rest_framework',
-    'django_extensions',
     'django_filters',
+    'rest_hooks',
+    'pyvat',
+
+    # Dev tools
+    'django_extensions',
     'rest_framework_swagger',
     'markdown'
 ]
@@ -61,3 +66,8 @@ REST_FRAMEWORK = {
     'PAGINATE_BY_PARAM': 'per_page',
     'MAX_PAGINATE_BY': 100,
 }
+
+from silver import HOOK_EVENTS as _HOOK_EVENTS
+HOOK_EVENTS = _HOOK_EVENTS
+
+# DEFAULT_TARGET_URL = 'http://presslabs.com/api'

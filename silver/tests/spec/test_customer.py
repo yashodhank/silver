@@ -4,43 +4,44 @@ import pytest
 from rest_framework import status
 from rest_framework.reverse import reverse
 from rest_framework.test import APITestCase
+
+from silver.models import Customer
 from silver.tests.factories import AdminUserFactory, CustomerFactory
 
 
-class TestCustomerEndpoint(APITestCase):
+class TestCustomerEndpoints(APITestCase):
     def setUp(self):
         admin_user = AdminUserFactory.create()
         self.client.force_authenticate(user=admin_user)
-
-    complete_data = {
-        "customer_reference": "123456",
-        "name": "Batman",
-        "company": "Wayne Enterprises",
-        "email": "bruce@wayneenterprises.com",
-        "address_1": "Batcave St.",
-        "address_2": "Some other address info",
-        "city": "Gotham",
-        "state": "SomeState",
-        "zip_code": "1111",
-        "country": "US",
-        "extra": "What is there more to say?",
-        "sales_tax_name": "VAT",
-        "sales_tax_percent": 3
-    }
+        self.complete_data = {
+            "customer_reference": "123456",
+            "name": "Batman",
+            "company": "Wayne Enterprises",
+            "email": "bruce@wayneenterprises.com",
+            "address_1": "Batcave St.",
+            "address_2": "Some other address info",
+            "city": "Gotham",
+            "state": "SomeState",
+            "zip_code": "1111",
+            "country": "US",
+            "extra": "What is there more to say?",
+            "sales_tax_number": "RO5555555",
+            "sales_tax_name": "VAT",
+            "sales_tax_percent": '3.00',
+            "consolidated_billing": False
+        }
 
     def test_create_post_customer(self):
-        url = reverse('silver_api:customer-list')
+        url = reverse('customer-list')
 
         response = self.client.post(url, json.dumps(self.complete_data),
                                     content_type='application/json')
-
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_create_post_customer_without_required_field(self):
-        url = reverse('silver_api:customer-list')
+        url = reverse('customer-list')
 
-        required_fields = ['address_1', 'city', 'zip_code', 'country',
-                           'sales_tax_name']
+        required_fields = ['name', 'address_1', 'city', 'country']
 
         for field in required_fields:
             temp_data = self.complete_data.copy()
@@ -58,19 +59,41 @@ class TestCustomerEndpoint(APITestCase):
                     or response.data == {field: ['This field is required.']})
 
     def test_get_customer_list(self):
-        CustomerFactory.create()
+        CustomerFactory.create_batch(40)
 
-        url = reverse('silver_api:customer-list')
+        url = reverse('customer-list')
 
         response = self.client.get(url)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertNotEqual(response.data, [])
+        full_url = None
+        for field in response.data:
+            full_url = field.get('url', None)
+            if full_url:
+                break
+        if full_url:
+            domain = full_url.split('/')[2]
+            full_url = full_url.split(domain)[0] + domain + url
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response._headers['x-result-count'] == ('X-Result-Count', '40')
+        assert response._headers['link'] == \
+            ('Link', '<' + full_url + '?page=2>; rel="next", ' +
+             '<' + full_url + '?page=2>; rel="last", ' +
+             '<' + full_url + '?page=1>; rel="first"')
+
+        response = self.client.get(url + '?page=2')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response._headers['x-result-count'] == ('X-Result-Count', '40')
+        assert response._headers['link'] == \
+            ('Link', '<' + full_url + '?page=1>; rel="prev", ' +
+             '<' + full_url + '?page=2>; rel="last", ' +
+             '<' + full_url + '?page=1>; rel="first"')
 
     def test_get_customer_detail(self):
         customer = CustomerFactory.create()
 
-        url = reverse('silver_api:customer-detail',
+        url = reverse('customer-detail',
                       kwargs={'pk': customer.pk})
 
         response = self.client.get(url)
@@ -79,7 +102,7 @@ class TestCustomerEndpoint(APITestCase):
         self.assertNotEqual(response.data, [])
 
     def test_get_customer_detail_unexisting(self):
-        url = reverse('silver_api:customer-detail',
+        url = reverse('customer-detail',
                       kwargs={'pk': 42})
 
         response = self.client.get(url)
@@ -90,13 +113,14 @@ class TestCustomerEndpoint(APITestCase):
     def test_delete_customer(self):
         customer = CustomerFactory.create()
 
-        url = reverse('silver_api:customer-detail', kwargs={'pk': customer.pk})
+        url = reverse('customer-detail', kwargs={'pk': customer.pk})
         response = self.client.delete(url)
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert Customer.objects.all().count() == 0
 
     def test_delete_unexisting_customer(self):
-        url = reverse('silver_api:customer-detail', kwargs={'pk': 42})
+        url = reverse('customer-detail', kwargs={'pk': 42})
         response = self.client.delete(url)
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -105,18 +129,18 @@ class TestCustomerEndpoint(APITestCase):
         CustomerFactory.create()
 
         changed_data = self.complete_data.copy()
-        unchanged_fields = ['email', 'address_2', 'name']
+        unchanged_fields = ['email', 'address_2']
         for field in unchanged_fields:
             changed_data.pop(field)
 
-        url = reverse('silver_api:customer-detail', kwargs={'pk': 1})
+        url = reverse('customer-detail', kwargs={'pk': 1})
 
         response = self.client.put(url, data=changed_data)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        response.data.pop('id')
-        response.data.pop('url')
+        for e in ['url', 'id', 'subscriptions']:
+            response.data.pop(e)
         for field in response.data:
             if field not in unchanged_fields:
                 self.assertEqual(response.data[field],
@@ -130,14 +154,14 @@ class TestCustomerEndpoint(APITestCase):
         for field in unchanged_fields:
             changed_data.pop(field)
 
-        url = reverse('silver_api:customer-detail', kwargs={'pk': 1})
+        url = reverse('customer-detail', kwargs={'pk': 1})
 
         response = self.client.patch(url, data=changed_data)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        response.data.pop('id')
-        response.data.pop('url')
+        for e in ['url', 'id', 'subscriptions']:
+            response.data.pop(e)
         for field in response.data:
             if field not in unchanged_fields:
                 self.assertEqual(response.data[field],

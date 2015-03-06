@@ -4,6 +4,7 @@ import json
 from rest_framework import status
 from rest_framework.reverse import reverse
 from rest_framework.test import APITestCase
+
 from silver.tests.factories import (AdminUserFactory, CustomerFactory,
                                     PlanFactory, SubscriptionFactory,
                                     MeteredFeatureFactory)
@@ -18,34 +19,27 @@ class TestSubscriptionEndpoint(APITestCase):
         plan = PlanFactory.create()
         customer = CustomerFactory.create()
 
-        plan_url = reverse('silver_api:plan-detail', kwargs={'pk': plan.pk})
-        customer_url = reverse('silver_api:customer-detail',
-                               kwargs={'pk': customer.pk})
+        plan_url = reverse('plan-detail', kwargs={'pk': plan.pk})
 
-        url = reverse('silver_api:subscription-list')
+        url = reverse('subscription-list', kwargs={'customer_pk': customer.pk})
 
         response = self.client.post(url, json.dumps({
             "plan": plan_url,
-            "customer": customer_url,
             "trial_end": '2014-12-07',
             "start_date": '2014-11-19'
         }), content_type='application/json')
-
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_create_post_subscription_with_invalid_trial_end(self):
         plan = PlanFactory.create()
         customer = CustomerFactory.create()
 
-        plan_url = reverse('silver_api:plan-detail', kwargs={'pk': plan.pk})
-        customer_url = reverse('silver_api:customer-detail',
-                               kwargs={'pk': customer.pk})
+        plan_url = reverse('plan-detail', kwargs={'pk': plan.pk})
 
-        url = reverse('silver_api:subscription-list')
+        url = reverse('subscription-list', kwargs={'customer_pk': customer.pk})
 
         response = self.client.post(url, json.dumps({
             "plan": plan_url,
-            "customer": customer_url,
             "trial_end": '2014-11-07',
             "start_date": '2014-11-19'
         }), content_type='application/json')
@@ -54,8 +48,9 @@ class TestSubscriptionEndpoint(APITestCase):
 
     def test_activate_subscription(self):
         subscription = SubscriptionFactory.create()
-        url = reverse('silver_api:sub-activate',
-                      kwargs={'sub': subscription.pk})
+        url = reverse('sub-activate',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk})
 
         response = self.client.post(url, content_type='application/json')
 
@@ -68,8 +63,9 @@ class TestSubscriptionEndpoint(APITestCase):
         subscription.cancel()
         subscription.save()
 
-        url = reverse('silver_api:sub-activate',
-                      kwargs={'sub': subscription.pk})
+        url = reverse('sub-activate',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk})
 
         response = self.client.post(url, content_type='application/json')
 
@@ -84,8 +80,9 @@ class TestSubscriptionEndpoint(APITestCase):
         subscription.activate()
         subscription.save()
 
-        url = reverse('silver_api:sub-cancel',
-                      kwargs={'sub': subscription.pk})
+        url = reverse('sub-cancel',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk})
 
         response = self.client.post(url, json.dumps({
             "when": "end_of_billing_cycle"}), content_type='application/json')
@@ -96,8 +93,9 @@ class TestSubscriptionEndpoint(APITestCase):
     def test_cancel_subscription_from_wrong_state(self):
         subscription = SubscriptionFactory.create()
 
-        url = reverse('silver_api:sub-cancel',
-                      kwargs={'sub': subscription.pk})
+        url = reverse('sub-cancel',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk})
 
         response = self.client.post(url, json.dumps({
             "when": "end_of_billing_cycle"}), content_type='application/json')
@@ -113,8 +111,9 @@ class TestSubscriptionEndpoint(APITestCase):
         subscription.activate()
         subscription.save()
 
-        url = reverse('silver_api:sub-cancel',
-                      kwargs={'sub': subscription.pk})
+        url = reverse('sub-cancel',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk})
 
         response = self.client.post(url, json.dumps({
             "when": "now"}), content_type='application/json')
@@ -125,8 +124,9 @@ class TestSubscriptionEndpoint(APITestCase):
     def test_end_subscription_from_wrong_state(self):
         subscription = SubscriptionFactory.create()
 
-        url = reverse('silver_api:sub-cancel',
-                      kwargs={'sub': subscription.pk})
+        url = reverse('sub-cancel',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk})
 
         response = self.client.post(url, json.dumps({
             "when": "now"}), content_type='application/json')
@@ -143,8 +143,9 @@ class TestSubscriptionEndpoint(APITestCase):
         subscription.cancel()
         subscription.save()
 
-        url = reverse('silver_api:sub-reactivate',
-                      kwargs={'sub': subscription.pk})
+        url = reverse('sub-reactivate',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk})
 
         response = self.client.post(url, content_type='application/json')
 
@@ -158,8 +159,9 @@ class TestSubscriptionEndpoint(APITestCase):
         subscription.end()
         subscription.save()
 
-        url = reverse('silver_api:sub-reactivate',
-                      kwargs={'sub': subscription.pk})
+        url = reverse('sub-reactivate',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk})
 
         response = self.client.post(url, content_type='application/json')
 
@@ -170,20 +172,45 @@ class TestSubscriptionEndpoint(APITestCase):
         )
 
     def test_get_subscription_list(self):
-        SubscriptionFactory.create_batch(4)
+        customer = CustomerFactory.create()
+        SubscriptionFactory.create_batch(40, customer=customer)
 
-        url = reverse('silver_api:subscription-list')
+        url = reverse('subscription-list',
+                      kwargs={'customer_pk': customer.pk})
 
         response = self.client.get(url)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertNotEqual(response.data, [])
+        full_url = None
+        for field in response.data:
+            full_url = field.get('url', None)
+            if full_url:
+                break
+        if full_url:
+            domain = full_url.split('/')[2]
+            full_url = full_url.split(domain)[0] + domain + url
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response._headers['x-result-count'] == ('X-Result-Count', '40')
+        assert response._headers['link'] == \
+            ('Link', '<' + full_url + '?page=2>; rel="next", ' +
+             '<' + full_url + '?page=2>; rel="last", ' +
+             '<' + full_url + '?page=1>; rel="first"')
+
+        response = self.client.get(url + '?page=2')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response._headers['x-result-count'] == ('X-Result-Count', '40')
+        assert response._headers['link'] == \
+            ('Link', '<' + full_url + '?page=1>; rel="prev", ' +
+             '<' + full_url + '?page=2>; rel="last", ' +
+             '<' + full_url + '?page=1>; rel="first"')
 
     def test_get_subscription_detail(self):
         subscription = SubscriptionFactory.create()
 
-        url = reverse('silver_api:subscription-detail',
-                      kwargs={'pk': subscription.pk})
+        url = reverse('subscription-detail',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk})
 
         response = self.client.get(url)
 
@@ -191,8 +218,10 @@ class TestSubscriptionEndpoint(APITestCase):
         self.assertNotEqual(response.data, [])
 
     def test_get_subscription_detail_unexisting(self):
-        url = reverse('silver_api:subscription-detail',
-                      kwargs={'pk': 42})
+        customer = CustomerFactory.create()
+        url = reverse('subscription-detail',
+                      kwargs={'subscription_pk': 42,
+                              'customer_pk': customer.pk})
 
         response = self.client.get(url)
 
@@ -208,9 +237,10 @@ class TestSubscriptionEndpoint(APITestCase):
         subscription.activate()
         subscription.save()
 
-        url = reverse('silver_api:mf-log-list',
-                      kwargs={'sub': subscription.pk,
-                              'mf': metered_feature.pk})
+        url = reverse('mf-log-units',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk,
+                              'mf_product_code': metered_feature.product_code})
 
         date = str(datetime.date.today() + datetime.timedelta(days=3))
 
@@ -238,9 +268,10 @@ class TestSubscriptionEndpoint(APITestCase):
         subscription.activate()
         subscription.save()
 
-        url = reverse('silver_api:mf-log-list',
-                      kwargs={'sub': subscription.pk,
-                              'mf': 42})
+        url = reverse('mf-log-units',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk,
+                              'mf_product_code': '1234'})
 
         response = self.client.patch(url)
 
@@ -252,9 +283,10 @@ class TestSubscriptionEndpoint(APITestCase):
         metered_feature = MeteredFeatureFactory.create()
         subscription.plan.metered_features.add(metered_feature)
 
-        url = reverse('silver_api:mf-log-list',
-                      kwargs={'sub': subscription.pk,
-                              'mf': metered_feature.pk})
+        url = reverse('mf-log-units',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk,
+                              'mf_product_code': metered_feature.product_code})
 
         response = self.client.patch(url)
 
@@ -271,9 +303,10 @@ class TestSubscriptionEndpoint(APITestCase):
         subscription.activate()
         subscription.save()
 
-        url = reverse('silver_api:mf-log-list',
-                      kwargs={'sub': subscription.pk,
-                              'mf': metered_feature.pk})
+        url = reverse('mf-log-units',
+                      kwargs={'subscription_pk': subscription.pk,
+                              'customer_pk': subscription.customer.pk,
+                              'mf_product_code': metered_feature.product_code})
 
         response = self.client.patch(url, json.dumps({
             "count": 150,
@@ -283,3 +316,79 @@ class TestSubscriptionEndpoint(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {'detail': 'Date is out of bounds'})
+
+    def test_subscription_mf_units_log_intervals(self):
+        subscription = SubscriptionFactory.create()
+        metered_feature = MeteredFeatureFactory.create()
+
+        subscription.plan.metered_features.add(metered_feature)
+
+        subscription.start_date = datetime.date(year=2015, month=2, day=17)
+        subscription.activate()
+        subscription.save()
+
+        # Monthly
+        subscription.plan.interval = 'month'
+        subscription.plan.interval_count = 1
+        subscription.plan.save()
+
+        subscription.trial_end = (subscription.start_date +
+                                  datetime.timedelta(days=15))
+
+        start_date = subscription.start_date
+        assert start_date == subscription.bucket_start_date(
+            reference_date=datetime.date(year=2015, month=2, day=17))
+
+        end_date = datetime.date(year=2015, month=2, day=28)
+        assert end_date == subscription.bucket_end_date(
+            reference_date=datetime.date(year=2015, month=2, day=23))
+
+        start_date = datetime.date(year=2015, month=3, day=1)
+        assert start_date == subscription.bucket_start_date(
+            reference_date=datetime.date(year=2015, month=3, day=1))
+
+        end_date = datetime.date(year=2015, month=3, day=4)
+        assert end_date == subscription.bucket_end_date(
+            reference_date=datetime.date(year=2015, month=3, day=1))
+
+        start_date = datetime.date(year=2015, month=3, day=5)
+        assert start_date == subscription.bucket_start_date(
+            reference_date=datetime.date(year=2015, month=3, day=5))
+
+        end_date = datetime.date(year=2015, month=3, day=31)
+        assert end_date == subscription.bucket_end_date(
+            reference_date=datetime.date(year=2015, month=3, day=22))
+
+        start_date = datetime.date(year=2015, month=4, day=1)
+        assert start_date == subscription.bucket_start_date(
+            reference_date=datetime.date(year=2015, month=4, day=5))
+
+        end_date = datetime.date(year=2015, month=4, day=30)
+        assert end_date == subscription.bucket_end_date(
+            reference_date=datetime.date(year=2015, month=4, day=22))
+
+        # Every 2 weeks
+        subscription.plan.interval = 'week'
+        subscription.plan.interval_count = 2
+        subscription.plan.save()
+
+        subscription.start_date = datetime.date(year=2015, month=5, day=31)
+        subscription.trial_end = (subscription.start_date +
+                                  datetime.timedelta(days=7))
+        subscription.save()
+
+        start_date = datetime.date(year=2015, month=5, day=31)
+        assert start_date == subscription.bucket_start_date(
+            reference_date=datetime.date(year=2015, month=6, day=3))
+
+        end_date = datetime.date(year=2015, month=6, day=7)
+        assert end_date == subscription.bucket_end_date(
+            reference_date=datetime.date(year=2015, month=6, day=7))
+
+        start_date = datetime.date(year=2015, month=6, day=8)
+        assert start_date == subscription.bucket_start_date(
+            reference_date=datetime.date(year=2015, month=6, day=12))
+
+        end_date = datetime.date(year=2015, month=6, day=21)
+        assert end_date == subscription.bucket_end_date(
+            reference_date=datetime.date(year=2015, month=6, day=8))
