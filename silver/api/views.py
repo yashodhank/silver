@@ -88,7 +88,7 @@ class PlanDetail(generics.RetrieveDestroyAPIView):
 
     def delete(self, request, *args, **kwargs):
         """
-        Performs a soft delete on a specific Plan.
+        Disables a specific Plan.
         """
         plan = get_object_or_404(Plan.objects, pk=self.kwargs.get('pk', None))
         plan.enabled = False
@@ -689,13 +689,6 @@ class InvoiceRetrieveUpdate(generics.RetrieveUpdateAPIView):
         """
         return super(InvoiceRetrieveUpdate, self).get(request, *args, **kwargs)
 
-    def delete(self, request, *args, **kwargs):
-        """
-        Performs a soft delete on a specific Invoice.
-        """
-        return super(InvoiceRetrieveUpdate, self).delete(
-            request, *args, **kwargs)
-
 
 class DocEntryCreate(generics.CreateAPIView):
     def get_model(self):
@@ -813,7 +806,7 @@ class InvoiceEntryUpdateDestroy(DocEntryUpdateDestroy):
 
     def put(self, request, *args, **kwargs):
         """
-        Updates an entry of an invoice.
+        Updates an entry of an Invoice.
 
         This operation is only possible when the invoice is in draft state.
         """
@@ -822,7 +815,7 @@ class InvoiceEntryUpdateDestroy(DocEntryUpdateDestroy):
 
     def delete(self, request, *args, **kwargs):
         """
-        Deletes an entry from an invoice.
+        Deletes an entry from an Invoice.
 
         This operation is only possible when the invoice is in draft state.
         """
@@ -842,7 +835,7 @@ class InvoiceStateHandler(APIView):
 
     def patch(self, request, *args, **kwargs):
         """
-        Used to issue, cancel or pay an invoice.
+        Used to issue, cancel or pay an Invoice.
 
         The operation is decided by providing the `state` field.
 
@@ -932,11 +925,52 @@ class ProformaListCreate(HPListCreateAPIView):
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = ProformaFilter
 
+    def post(self, request, *args, **kwargs):
+        """
+        Adds a new Proforma.
+        """
+        return super(InvoiceListCreate, self).post(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a queryset containing proformas.
+
+        Filtering can be done with the following parameters: `state`, `number`,
+         `customer_name`, `customer_company`, `issue_date`, `due_date`,
+         `paid_date`, `cancel_date`, `currency`, `sales_tax_name`, `series`
+        """
+        return super(InvoiceListCreate, self).get(request, *args, **kwargs)
+
 
 class ProformaRetrieveUpdate(generics.RetrieveUpdateAPIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = ProformaSerializer
     queryset = Proforma.objects.all()
+
+    def put(self, request, *args, **kwargs):
+        """
+        Adds or does a full update on a Proforma.
+
+        Modifying a proforma is only possible when it's in draft state. Also,
+        take note that the proforma state cannot be updated through this method.
+        """
+        return super(InvoiceRetrieveUpdate, self).put(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        """
+        Partially updates an existing Proforma.
+
+        Modifying a proforma is only possible when it's in draft state. Also,
+        take note that the proforma state cannot be updated through this method.
+        """
+        return super(InvoiceRetrieveUpdate, self).patch(
+            request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Returns a specific Proforma.
+        """
+        return super(InvoiceRetrieveUpdate, self).get(request, *args, **kwargs)
 
 
 class ProformaEntryCreate(DocEntryCreate):
@@ -945,6 +979,11 @@ class ProformaEntryCreate(DocEntryCreate):
     queryset = DocumentEntry.objects.all()
 
     def post(self, request, *args, **kwargs):
+        """
+        Adds an entry to a Proforma.
+
+        This operation is only possible when the proforma is in draft state.
+        """
         return super(ProformaEntryCreate, self).post(request, *args, **kwargs)
 
     def get_model(self):
@@ -960,10 +999,20 @@ class ProformaEntryUpdateDestroy(DocEntryUpdateDestroy):
     queryset = DocumentEntry.objects.all()
 
     def put(self, request, *args, **kwargs):
+        """
+        Updates an entry of a Proforma.
+
+        This operation is only possible when the proforma is in draft state.
+        """
         return super(ProformaEntryUpdateDestroy, self).put(request, *args,
                                                            **kwargs)
 
     def delete(self, request, *args, **kwargs):
+        """
+        Deletes an entry from a Proforma.
+
+        This operation is only possible when the proforma is in draft state.
+        """
         return super(ProformaEntryUpdateDestroy, self).delete(request, *args,
                                                               **kwargs)
 
@@ -979,6 +1028,42 @@ class ProformaStateHandler(APIView):
     serializer_class = ProformaSerializer
 
     def patch(self, request, *args, **kwargs):
+        """
+        Used to issue, cancel or pay a Proforma.
+
+        The operation is decided by providing the `state` field.
+
+
+        ##Issuing (state = 'issued')##
+        The proforma must be in `draft` state.
+
+        When issue_date is specified, the proforma's issue_date is set to this
+        value. If it's not and the proforma has no issue_date set, it it set to
+        the current date.
+
+        If due_date is specified it overwrites the proforma's due_date
+        If the proforma has no billing_details set, it copies the
+        billing_details from the customer. The same goes with sales_tax_percent
+        and sales_tax_name
+        It sets the proforma status to issued.
+
+
+        ##Paying (state = 'paid')##
+        The proforma must be in the issued state. Paying a proforma follows
+        these steps:
+
+        If paid_date is specified, set the proforma paid_date to this value,
+        else set the proforma paid_date to the current date.
+        Sets the proforma status to paid.
+
+        ##Paying (state = 'canceled')##
+        The proforma must be in the issued state. Canceling a proforma follows
+        these steps:
+
+        If cancel_date is specified, set the proforma cancel_date to this value,
+        else set the proforma cancel_date to the current date.
+        Sets the proforma status to paid.
+        """
         proforma_pk = kwargs.get('pk')
         try:
             proforma = Proforma.objects.get(pk=proforma_pk)
